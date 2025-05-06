@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Multi-Topic Quiz App</title>
+<style>
+  /* Reset and base */
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #eee;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  #app {
+    background: #1e1e2f;
+    border-radius: 15px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  h1, h2, h3 {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  button {
+    background: #764ba2;
+    border: none;
+    color: #eee;
+    padding: 10px 20px;
+    font-weight: 700;
+    font-size: 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+  button:hover, button:focus {
+    background: #667eea;
+    outline: none;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    font-size: 1rem;
+    margin-bottom: 15px;
+    outline: none;
+  }
+  .option {
+    background: #2c2c44;
+    padding: 10px;
+    margin: 8px 0;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    user-select: none;
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+  .option:hover {
+    background: #3f3f66;
+  }
+  .option.selected {
+    border-color: #667eea;
+    background: #4b4b80;
+  }
+  .option.correct {
+    background: #2ecc71 !important;
+    border-color: #27ae60 !important;
+    color: white;
+  }
+  .option.incorrect {
+    background: #e74c3c !important;
+    border-color: #c0392b !important;
+    color: white;
+  }
+  #timer {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    text-align: right;
+    font-weight: 700;
+  }
+  #question-container {
+    margin-bottom: 20px;
+  }
+  .hidden {
+    display: none;
+  }
+  .centered-text {
+    text-align: center;
+  }
+  /* Scrollbar for options if needed */
+  .options-container {
+    max-height: 280px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+  }
+
+  /* Responsive */
+  @media (max-width: 600px) {
+    #app {
+      max-width: 100%;
+      border-radius: 0;
+      height: 100vh;
+      box-shadow: none;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    button {
+      margin-bottom: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="app" role="main" aria-live="polite">
+
+<!-- Login Screen -->
+<section id="login-screen">
+  <h1>Welcome to Quiz Arcade</h1>
+  <label for="username" class="centered-text" style="display:block;margin-bottom:8px;">Please enter your name to start</label>
+  <input type="text" id="username" aria-label="Username" placeholder="Your name" autocomplete="off" />
+  <button id="login-btn" aria-label="Login to start quiz">Start</button>
+</section>
+
+<!-- Topic Selection -->
+<section id="topic-selection" class="hidden" aria-live="polite">
+  <h2>Hello, <span id="user-name-display"></span>! Choose a Topic</h2>
+  <div id="topics-container">
+    <!-- Buttons dynamically inserted -->
+  </div>
+  <button id="logout-btn" style="background:#e74c3c;">Logout</button>
+</section>
+
+<!-- Set Selection -->
+<section id="set-selection" class="hidden" aria-live="polite">
+  <h2>Choose a Set for <span id="topic-name-display"></span></h2>
+  <div id="sets-container">
+    <!-- Sets buttons inserted here -->
+  </div>
+  <button id="back-to-topic-btn" style="background:#34495e;">Back to Topics</button>
+</section>
+
+<!-- Quiz Screen -->
+<section id="quiz-screen" class="hidden" aria-live="assertive">
+  <div id="quiz-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+    <div>Topic: <strong id="quiz-topic-name"></strong></div>
+    <div>Set: <strong id="quiz-set-name"></strong></div>
+  </div>
+  <div id="timer" aria-live="polite" aria-atomic="true">Time Left: <span id="time-left">30</span>s</div>
+  <div id="question-container">
+    <h3 id="question-text"></h3>
+    <div class="options-container" id="options-container" role="list">
+      <!-- Options inserted here -->
+    </div>
+  </div>
+  <button id="next-question-btn" disabled aria-label="Next question">Next</button>
+</section>
+
+<!-- Result Screen -->
+<section id="result-screen" class="hidden" aria-live="polite">
+  <h2>Quiz Completed!</h2>
+  <p id="result-summary"></p>
+  <p id="result-details"></p>
+  <button id="restart-btn">Take Another Quiz</button>
+</section>
+
+</div>
+
+<script>
+(() => {
+  // Quiz data: topics, sets, questions
+  // For brevity, example questions only. Each set has 20 questions (some repeated due to example)
+  const quizData = {
+    "Programming": {
+      "Set A": [
+        {
+          question: "Which language is primarily used for web development?",
+          options: ["Python", "JavaScript", "C++", "Java"],
+          answer: 1
+        },
+        {
+          question: "What does CSS stand for?",
+          options: ["Cascading Style Sheets", "Colorful Style Sheets", "Computer Style Sheets", "Creative Style Sheets"],
+          answer: 0
+        },
+        {
+          question: "Which symbol is used for comments in JavaScript?",
+          options: ["//", "/* */", "#", "<!-- -->"],
+          answer: 0
+        },
+        {
+          question: "Which keyword is used to declare a variable in JavaScript?",
+          options: ["var", "let", "const", "All of the above"],
+          answer: 3
+        },
+        {
+          question: "In programming, what does 'API' stand for?",
+          options: ["Application Programming Interface", "Applied Program Integration", "Abstract Programming Instruction", "Advanced Program Interaction"],
+          answer: 0
+        },
+        {
+          question: "What is a function in programming?",
+          options: ["A block of code designed to perform a task", "A type of variable", "An error in program", "A type of loop"],
+          answer: 0
+        },
+        {
+          question: "Which of these is not a programming language?",
+          options: ["Python", "HTML", "Java", "C#"],
+          answer: 1
+        },
+        {
+          question: "Which data structure uses FIFO principle?",
+          options: ["Stack", "Queue", "Tree", "Graph"],
+          answer: 1
+        },
+        {
+          question: "What does 'DOM' stand for in web development?",
+          options: ["Document Object Model", "Data Object Model", "Document Oriented Model", "Direct Object Model"],
+          answer: 0
+        },
+        {
+          question: "Which company created the Java programming language?",
+          options: ["Microsoft", "Apple", "Sun Microsystems", "Google"],
+          answer: 2
+        },
+        {
+          question: "Which built-in method removes the last element from an array in JavaScript?",
+          options: ["shift()", "pop()", "push()", "unshift()"],
+          answer: 1
+        },
+        {
+          question: "What symbol is used to access object properties in JavaScript?",
+          options: [".", "#", "->", "$"],
+          answer: 0
+        },
+        {
+          question: "Which statement is used to exit a loop prematurely?",
+          options: ["continue", "exit", "break", "stop"],
+          answer: 2
+        },
+        {
+          question: "Which keyword declares a constant in JavaScript?",
+          options: ["var", "let", "const", "constant"],
+          answer: 2
+        },
+        {
+          question: "Which of these is not a primitive data type in JavaScript?",
+          options: ["String", "Number", "Object", "Boolean"],
+          answer: 2
+        },
+        {
+          question: "Which method converts a JSON string into a JavaScript object?",
+          options: ["JSON.parse()", "JSON.stringify()", "JSON.convert()", "JSON.toObject()"],
+          answer: 0
+        },
+        {
+          question: "What does 'NaN' mean in JavaScript?",
+          options: ["Not a Number", "Null and Nothing", "Number and Name", "No Action Needed"],
+          answer: 0
+        },
+        {
+          question: "Which HTML element is used to link a JavaScript file?",
+          options: ["<script>", "<js>", "<link>", "<javascript>"],
+          answer: 0
+        },
+        {
+          question: "Which HTML attribute contains the URL for a hyperlink?",
+          options: ["href", "src", "link", "url"],
+          answer: 0
+        },
+        {
+          question: "Which property is used to change the text color in CSS?",
+          options: ["color", "font-color", "text-color", "foreground"],
+          answer: 0
+        }
+      ],
+      "Set B": [
+        // A different set of questions or repeats with shuffle (for example purpose, we reuse Set A here)
+        // In production, these would be different questions.
+        {
+          question: "What symbol is used for comments in JavaScript?",
+          options: ["//", "/* */", "#", "<!-- -->"],
+          answer: 0
+        },
+        {
+          question: "Which keyword declares a constant in JavaScript?",
+          options: ["var", "let", "const", "constant"],
+          answer: 2
+        },
+        {
+          question: "Which of these is not a primitive data type in JavaScript?",
+          options: ["String", "Number", "Object", "Boolean"],
+          answer: 2
+        },
+        {
+          question: "Which built-in method removes the last element from an array in JavaScript?",
+          options: ["shift()", "pop()", "push()", "unshift()"],
+          answer: 1
+        },
+        {
+          question: "What does 'NaN' mean in JavaScript?",
+          options: ["Not a Number", "Null and Nothing", "Number and Name", "No Action Needed"],
+          answer: 0
+        },
+        {
+          question: "Which symbol is used to access object properties in JavaScript?",
+          options: [".", "#", "->", "$"],
+          answer: 0
+        },
+        {
+          question: "Which data structure uses FIFO principle?",
+          options: ["Stack", "Queue", "Tree", "Graph"],
+          answer: 1
+        },
+        {
+          question: "Which statement is used to exit a loop prematurely?",
+          options: ["continue", "exit", "break", "stop"],
+          answer: 2
+        },
+        {
+          question: "What method converts a JSON string into a JavaScript object?",
+          options: ["JSON.parse()", "JSON.stringify()", "JSON.convert()", "JSON.toObject()"],
+          answer: 0
+        },
+        {
+          question: "In programming, what does 'API' stand for?",
+          options: ["Application Programming Interface", "Applied Program Integration", "Abstract Programming Instruction", "Advanced Program Interaction"],
+          answer: 0
+        },
+        {
+          question: "Which HTML attribute contains the URL for a hyperlink?",
+          options: ["href", "src", "link", "url"],
+          answer: 0
+        },
+        {
+          question: "Which language is primarily used for web development?",
+          options: ["Python", "JavaScript", "C++", "Java"],
+          answer: 1
+        },
+        {
+          question: "What is a function in programming?",
+          options: ["A block of code designed to perform a task", "A type of variable", "An error in program", "A type of loop"],
+          answer: 0
+        },
+        {
+          question: "Which keyword is used to declare a variable in JavaScript?",
+          options: ["var", "let", "const", "All of the above"],
+          answer: 3
+        },
+        {
+          question: "Which HTML element is used to link a JavaScript file?",
+          options: ["<script>", "<js>", "<link>", "<javascript>"],
+          answer: 0
+        },
+        {
+          question: "What does CSS stand for?",
+          options: ["Cascading Style Sheets", "Colorful Style Sheets", "Computer Style Sheets", "Creative Style Sheets"],
+          answer: 0
+        },
+        {
+          question: "Which company created the Java programming language?",
+          options: ["Microsoft", "Apple", "Sun Microsystems", "Google"],
+          answer: 2
+        },
+        {
+          question: "Which property is used to change the text color in CSS?",
+          options: ["color", "font-color", "text-color", "foreground"],
+          answer: 0
+        },
+        {
+          question: "Which data structure uses FIFO principle?",
+          options: ["Stack", "Queue", "Tree", "Graph"],
+          answer: 1
+        },
+        {
+          question: "Which of these is not a programming language?",
+          options: ["Python", "HTML", "Java", "C#"],
+          answer: 1
+        }
+      ]
+    },
+    "Science": {
+      "Set A": [
+        {
+          question: "What planet is known as the Red Planet?",
+          options: ["Earth", "Mars", "Jupiter", "Saturn"],
+          answer: 1
+        },
+        {
+          question: "What is the chemical symbol for water?",
+          options: ["H2O", "O2", "CO2", "NaCl"],
+          answer: 0
+        },
+        {
+          question: "What gas do plants absorb from the atmosphere?",
+          options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"],
+          answer: 2
+        },
+        {
+          question: "What force pulls objects toward Earth?",
+          options: ["Magnetism", "Gravity", "Friction", "Electricity"],
+          answer: 1
+        },
+        {
+          question: "Which organ pumps blood through the body?",
+          options: ["Lungs", "Heart", "Brain", "Liver"],
+          answer: 1
+        },
+        {
+          question: "What is the speed of light?",
+          options: ["300,000 km/s", "150,000 km/s", "1,000 km/s", "30,000 km/s"],
+          answer: 0
+        },
+        {
+          question: "Which gas is most abundant in the Earth's atmosphere?",
+          options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Helium"],
+          answer: 1
+        },
+        {
+          question: "What is the powerhouse of the cell?",
+          options: ["Nucleus", "Mitochondria", "Ribosome", "Chloroplast"],
+          answer: 1
+        },
+        {
+          question: "Water boils at what temperature (Celsius)?",
+          options: ["0°C", "100°C", "50°C", "212°C"],
+          answer: 1
+        },
+        {
+          question: "Which planet has the most moons?",
+          options: ["Mars", "Saturn", "Jupiter", "Venus"],
+          answer: 2
+        },
+        {
+          question: "What part of the atom has a positive charge?",
+          options: ["Electron", "Proton", "Neutron", "Photon"],
+          answer: 1
+        },
+        {
+          question: "Which vitamin is produced when the skin is exposed to sunlight?",
+          options: ["Vitamin A", "Vitamin C", "Vitamin D", "Vitamin B12"],
+          answer: 2
+        },
+        {
+          question: "Which gas do humans breathe out?",
+          options: ["Oxygen", "Carbon Dioxide", "Nitrogen", "Hydrogen"],
+          answer: 1
+        },
+        {
+          question: "Which planet is closest to the sun?",
+          options: ["Mercury", "Venus", "Earth", "Mars"],
+          answer: 0
+        },
+        {
+          question: "What type of energy does the sun produce?",
+          options: ["Nuclear", "Solar", "Chemical", "Thermal"],
+          answer: 1
+        },
+        {
+          question: "Which body part controls the nervous system?",
+          options: ["Liver", "Lungs", "Brain", "Kidneys"],
+          answer: 2
+        },
+        {
+          question: "Which particle has no electrical charge?",
+          options: ["Electron", "Proton", "Neutron", "Alpha"],
+          answer: 2
+        },
+        {
+          question: "What is the largest planet in the solar system?",
+          options: ["Earth", "Saturn", "Jupiter", "Neptune"],
+          answer: 2
+        },
+        {
+          question: "What unit is used to measure force?",
+          options: ["Joule", "Newton", "Pascal", "Watt"],
+          answer: 1
+        },
+        {
+          question: "What is the center of an atom called?",
+          options: ["Electron Cloud", "Nucleus", "Proton", "Neutron"],
+          answer: 1
+        }
+      ],
+      "Set B": [
+        // Repetitive example questions for second set, in real case should be separate questions.
+        {
+          question: "Which gas do plants absorb from the atmosphere?",
+          options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Hydrogen"],
+          answer: 2
+        },
+        {
+          question: "What organ pumps blood through the body?",
+          options: ["Lungs", "Heart", "Brain", "Liver"],
+          answer: 1
+        },
+        {
+          question: "Water boils at what temperature (Celsius)?",
+          options: ["0°C", "100°C", "50°C", "212°C"],
+          answer: 1
+        },
+        {
+          question: "Which particle has no electrical charge?",
+          options: ["Electron", "Proton", "Neutron", "Alpha"],
+          answer: 2
+        },
+        {
+          question: "What vitamin is produced when the skin is exposed to sunlight?",
+          options: ["Vitamin A", "Vitamin C", "Vitamin D", "Vitamin B12"],
+          answer: 2
+        },
+        {
+          question: "What is the largest planet in the solar system?",
+          options: ["Earth", "Saturn", "Jupiter", "Neptune"],
+          answer: 2
+        },
+        {
+          question: "What unit is used to measure force?",
+          options: ["Joule", "Newton", "Pascal", "Watt"],
+          answer: 1
+        },
+        {
+          question: "Which body part controls the nervous system?",
+          options: ["Liver", "Lungs", "Brain", "Kidneys"],
+          answer: 2
+        },
+        {
+          question: "Which planet is known as the Red Planet?",
+          options: ["Earth", "Mars", "Jupiter", "Saturn"],
+          answer: 1
+        },
+        {
+          question: "What particle has a positive charge?",
+          options: ["Electron", "Proton", "Neutron", "Photon"],
+          answer: 1
+        },
+        {
+          question: "Which gas is most abundant in Earth's atmosphere?",
+          options: ["Oxygen", "Nitrogen", "Carbon Dioxide", "Helium"],
+          answer: 1
+        },
+        {
+          question: "What type of energy does the sun produce?",
+          options: ["Nuclear", "Solar", "Chemical", "Thermal"],
+          answer: 1
+        },
+        {
+          question: "Which planet is closest to the sun?",
+          options: ["Mercury", "Venus", "Earth", "Mars"],
+          answer: 0
+        },
+        {
+          question: "Which gas do humans breathe out?",
+          options: ["Oxygen", "Carbon Dioxide", "Nitrogen", "Hydrogen"],
+          answer: 1
+        },
+        {
+          question: "What is the chemical symbol for water?",
+          options: ["H2O", "O2", "CO2", "NaCl"],
+          answer: 0
+        },
+        {
+          question: "What force pulls objects toward Earth?",
+          options: ["Magnetism", "Gravity", "Friction", "Electricity"],
+          answer: 1
+        },
+        {
+          question: "Which organ pumps blood through the body?",
+          options: ["Lungs", "Heart", "Brain", "Liver"],
+          answer: 1
+        },
+        {
+          question: "What is the speed of light?",
+          options: ["300,000 km/s", "150,000 km/s", "1,000 km/s", "30,000 km/s"],
+          answer: 0
+        },
+        {
+          question: "Which part of the atom has a positive charge?",
+          options: ["Electron", "Proton", "Neutron", "Photon"],
+          answer: 1
+        },
+        {
+          question: "Which vitamin is produced when skin is exposed to sunlight?",
+          options: ["Vitamin A", "Vitamin C", "Vitamin D", "Vitamin B12"],
+          answer: 2
+        }
+      ]
+    },
+    "AI-ML": {
+      "Set A": [
+        {
+          question: "What does AI stand for?",
+          options: ["Automatic Intelligence", "Artificial Intelligence", "Applied Intelligence", "Advanced Integration"],
+          answer: 1
+        },
+        {
+          question: "Which algorithm is used for supervised learning?",
+          options: ["K-Means Clustering", "Linear Regression", "Apriori Algorithm", "DBSCAN"],
+          answer: 1
+        },
+        {
+          question: "What is overfitting in machine learning?",
+          options: ["When the model performs well on unseen data", "When the model performs poorly on the training data", "When the model performs well on training data but poorly on new data", "When the model is too simple"],
+          answer: 2
+        },
+        {
+          question: "Which of these is a neural network?",
+          options: ["Decision Tree", "Support Vector Machine", "Perceptron", "K-Nearest Neighbor"],
+          answer: 2
+        },
+        {
+          question: "Which language is commonly used for AI programming?",
+          options: ["Python", "HTML", "CSS", "PHP"],
+          answer: 0
+        },
+        {
+          question: "What type of learning uses labeled data?",
+          options: ["Supervised Learning", "Unsupervised Learning", "Reinforcement Learning", "Deep Learning"],
+          answer: 0
+        },
+        {
+          question: "Which library is popular for machine learning in Python?",
+          options: ["TensorFlow", "React", "Django", "Bootstrap"],
+          answer: 0
+        },
+        {
+          question: "What does 'ML' stand for?",
+          options: ["Machine Learning", "Manual Learning", "Mathematical Logic", "Modern Learning"],
+          answer: 0
+        },
+        {
+          question: "Which method is used for unsupervised learning?",
+          options: ["Classification", "Clustering", "Regression", "Forecasting"],
+          answer: 1
+        },
+        {
+          question: "Which model is useful for image recognition?",
+          options: ["Convolutional Neural Network", "Random Forest", "Linear Regression", "Naive Bayes"],
+          answer: 0
+        },
+        {
+          question: "What is a confusion matrix?",
+          options: ["A table used to evaluate the performance of an algorithm", "A type of neural network", "A type of data preprocessing", "A clustering algorithm"],
+          answer: 0
+        },
+        {
+          question: "Which technique reduces dimensionality?",
+          options: ["PCA", "SVM", "KNN", "LDA"],
+          answer: 0
+        },
+        {
+          question: "What is reinforcement learning?",
+          options: ["Learning from labeled data", "Learning without labeled data", "Learning by trial and error", "Learning from errors"],
+          answer: 2
+        },
+        {
+          question: "Which of these is not a machine learning paradigm?",
+          options: ["Supervised", "Unsupervised", "Reinforcement", "Telepathic"],
+          answer: 3
+        },
+        {
+          question: "Which concept defines the nodes in a neural network?",
+          options: ["Neurons", "Units", "Nodes", "All of the above"],
+          answer: 3
+        },
+        {
+          question: "Which function is often used as an activation function?",
+          options: ["ReLU", "Add", "Multiply", "Divide"],
+          answer: 0
+        },
+        {
+          question: "What is the purpose of cross-validation?",
+          options: ["To tune hyperparameters", "To check model performance on unseen data", "To reduce data", "To handle missing values"],
+          answer: 1
+        },
+        {
+          question: "Which of these is a regression algorithm?",
+          options: ["Linear Regression", "K-Means", "Decision Tree", "Apriori"],
+          answer: 0
+        },
+        {
+          question: "Which metric is used for classification evaluation?",
+          options: ["Accuracy", "MSE", "RMSE", "R-squared"],
+          answer: 0
+        },
+        {
+          question: "Which process involves transforming raw data into a form suitable for analysis?",
+          options: ["Data Cleaning", "Feature Engineering", "Data Wrangling", "All of the above"],
+          answer: 3
+        }
+      ],
+      "Set B": [
+        // For simplicity reusing SetA questions here for demo purpose
+        {
+          question: "What does AI stand for?",
+          options: ["Automatic Intelligence", "Artificial Intelligence", "Applied Intelligence", "Advanced Integration"],
+          answer: 1
+        },
+        {
+          question: "Which algorithm is used for supervised learning?",
+          options: ["K-Means Clustering", "Linear Regression", "Apriori Algorithm", "DBSCAN"],
+          answer: 1
+        },
+        {
+          question: "What is overfitting in machine learning?",
+          options: ["When the model performs well on unseen data", "When the model performs poorly on the training data", "When the model performs well on training data but poorly on new data", "When the model is too simple"],
+          answer: 2
+        },
+        {
+          question: "Which of these is a neural network?",
+          options: ["Decision Tree", "Support Vector Machine", "Perceptron", "K-Nearest Neighbor"],
+          answer: 2
+        },
+        {
+          question: "Which language is commonly used for AI programming?",
+          options: ["Python", "HTML", "CSS", "PHP"],
+          answer: 0
+        },
+        {
+          question: "What type of learning uses labeled data?",
+          options: ["Supervised Learning", "Unsupervised Learning", "Reinforcement Learning", "Deep Learning"],
+          answer: 0
+        },
+        {
+          question: "Which library is popular for machine learning in Python?",
+          options: ["TensorFlow", "React", "Django", "Bootstrap"],
+          answer: 0
+        },
+        {
+          question: "What does 'ML' stand for?",
+          options: ["Machine Learning", "Manual Learning", "Mathematical Logic", "Modern Learning"],
+          answer: 0
+        },
+        {
+          question: "Which method is used for unsupervised learning?",
+          options: ["Classification", "Clustering", "Regression", "Forecasting"],
+          answer: 1
+        },
+        {
+          question: "Which model is useful for image recognition?",
+          options: ["Convolutional Neural Network", "Random Forest", "Linear Regression", "Naive Bayes"],
+          answer: 0
+        },
+        {
+          question: "What is a confusion matrix?",
+          options: ["A table used to evaluate the performance of an algorithm", "A type of neural network", "A type of data preprocessing", "A clustering algorithm"],
+          answer: 0
+        },
+        {
+          question: "Which technique reduces dimensionality?",
+          options: ["PCA", "SVM", "KNN", "LDA"],
+          answer: 0
+        },
+        {
+          question: "What is reinforcement learning?",
+          options: ["Learning from labeled data", "Learning without labeled data", "Learning by trial and error", "Learning from errors"],
+          answer: 2
+        },
+        {
+          question: "Which of these is not a machine learning paradigm?",
+          options: ["Supervised", "Unsupervised", "Reinforcement", "Telepathic"],
+          answer: 3
+        },
+        {
+          question: "Which concept defines the nodes in a neural network?",
+          options: ["Neurons", "Units", "Nodes", "All of the above"],
+          answer: 3
+        },
+        {
+          question: "Which function is often used as an activation function?",
+          options: ["ReLU", "Add", "Multiply", "Divide"],
+          answer: 0
+        },
+        {
+          question: "What is the purpose of cross-validation?",
+          options: ["To tune hyperparameters", "To check model performance on unseen data", "To reduce data", "To handle missing values"],
+          answer: 1
+        },
+        {
+          question: "Which of these is a regression algorithm?",
+          options: ["Linear Regression", "K-Means", "Decision Tree", "Apriori"],
+          answer: 0
+        },
+        {
+          question: "Which metric is used for classification evaluation?",
+          options: ["Accuracy", "MSE", "RMSE", "R-squared"],
+          answer: 0
+        },
+        {
+          question: "Which process involves transforming raw data into a form suitable for analysis?",
+          options: ["Data Cleaning", "Feature Engineering", "Data Wrangling", "All of the above"],
+          answer: 3
+        }
+      ]
+    },
+    "Sports": {
+      "Set A": [
+        {
+          question: "How many players are there in a football (soccer) team on the field?",
+          options: ["9", "10", "11", "12"],
+          answer: 2
+        },
+        {
+          question: "Which country won the FIFA World Cup 2018?",
+          options: ["Brazil", "Germany", "France", "Argentina"],
+          answer: 2
+        },
+        {
+          question: "In tennis, what is a score of zero called?",
+          options: ["Love", "Nil", "Zero", "Blank"],
+          answer: 0
+        },
+        {
+          question: "The Olympics are held every how many years?",
+          options: ["2", "3", "4", "5"],
+          answer: 2
+        },
+        {
+          question: "Which sport uses a puck?",
+          options: ["Basketball", "Ice Hockey", "Baseball", "Soccer"],
+          answer: 1
+        },
+        {
+          question: "How long is a rugby match?",
+          options: ["60 minutes", "70 minutes", "80 minutes", "90 minutes"],
+          answer: 2
+        },
+        {
+          question: "Which country invented volleyball?",
+          options: ["USA", "Canada", "UK", "Brazil"],
+          answer: 0
+        },
+        {
+          question: "In basketball, how many points is a free throw worth?",
+          options: ["1", "2", "3", "4"],
+          answer: 0
+        },
+        {
+          question: "Who holds the record for most goals in a single World Cup?",
+          options: ["Pele", "Ronaldo", "Miroslav Klose", "Just Fontaine"],
+          answer: 3
+        },
+        {
+          question: "How many minutes are there in a standard soccer match?",
+          options: ["80", "90", "100", "110"],
+          answer: 1
+        },
+        {
+          question: "In which sport can you score a 'home run'?",
+          options: ["Cricket", "Baseball", "Tennis", "Golf"],
+          answer: 1
+        },
+        {
+          question: "Which country hosted the 2016 Summer Olympics?",
+          options: ["China", "Brazil", "UK", "Russia"],
+          answer: 1
+        },
+        {
+          question: "Which piece of equipment is used in fencing?",
+          options: ["Sword", "Stick", "Bow", "Glove"],
+          answer: 0
+        },
+        {
+          question: "How many players are on a basketball team on the court?",
+          options: ["4", "5", "6", "7"],
+          answer: 1
+        },
+        {
+          question: "What is the length of an Olympic swimming pool?",
+          options: ["25 meters", "50 meters", "75 meters", "100 meters"],
+          answer: 1
+        },
+        {
+          question: "Which athlete is known as the fastest man alive?",
+          options: ["Usain Bolt", "Carl Lewis", "Michael Johnson", "Asafa Powell"],
+          answer: 0
+        },
+        {
+          question: "What sport is associated with Wimbledon?",
+          options: ["Tennis", "Badminton", "Cricket", "Squash"],
+          answer: 0
+        },
+        {
+          question: "In which sport is the term 'birdie' used?",
+          options: ["Golf", "Tennis", "Baseball", "Cycling"],
+          answer: 0
+        },
+        {
+          question: "Which sport uses the terms 'strike' and 'spare'?",
+          options: ["Bowling", "Baseball", "Cricket", "Soccer"],
+          answer: 0
+        },
+        {
+          question: "Which country is famous for sumo wrestling?",
+          options: ["China", "Japan", "Korea", "Thailand"],
+          answer: 1
+        }
+      ],
+      "Set B": [
+        // Same here, reusing Set A questions for demo simplicity
+        {
+          question: "Which country won the FIFA World Cup 2018?",
+          options: ["Brazil", "Germany", "France", "Argentina"],
+          answer: 2
+        },
+        {
+          question: "In tennis, what is a score of zero called?",
+          options: ["Love", "Nil", "Zero", "Blank"],
+          answer: 0
+        },
+        {
+          question: "The Olympics are held every how many years?",
+          options: ["2", "3", "4", "5"],
+          answer: 2
+        },
+        {
+          question: "Which sport uses a puck?",
+          options: ["Basketball", "Ice Hockey", "Baseball", "Soccer"],
+          answer: 1
+        },
+        {
+          question: "How long is a rugby match?",
+          options: ["60 minutes", "70 minutes", "80 minutes", "90 minutes"],
+          answer: 2
+        },
+        {
+          question: "Which country invented volleyball?",
+          options: ["USA", "Canada", "UK", "Brazil"],
+          answer: 0
+        },
+        {
+          question: "In basketball, how many points is a free throw worth?",
+          options: ["1", "2", "3", "4"],
+          answer: 0
+        },
+        {
+          question: "Who holds the record for most goals in a single World Cup?",
+          options: ["Pele", "Ronaldo", "Miroslav Klose", "Just Fontaine"],
+          answer: 3
+        },
+        {
+          question: "How many minutes are there in a standard soccer match?",
+          options: ["80", "90", "100", "110"],
+          answer: 1
+        },
+        {
+          question: "In which sport can you score a 'home run'?",
+          options: ["Cricket", "Baseball", "Tennis", "Golf"],
+          answer: 1
+        },
+        {
+          question: "Which country hosted the 2016 Summer Olympics?",
+          options: ["China", "Brazil", "UK", "Russia"],
+          answer: 1
+        },
+        {
+          question: "Which piece of equipment is used in fencing?",
+          options: ["Sword", "Stick", "Bow", "Glove"],
+          answer: 0
+        },
+        {
+          question: "How many players are on a basketball team on the court?",
+          options: ["4", "5", "6", "7"],
+          answer: 1
+        },
+        {
+          question: "What is the length of an Olympic swimming pool?",
+          options: ["25 meters", "50 meters", "75 meters", "100 meters"],
+          answer: 1
+        },
+        {
+          question: "Which athlete is known as the fastest man alive?",
+          options: ["Usain Bolt", "Carl Lewis", "Michael Johnson", "Asafa Powell"],
+          answer: 0
+        },
+        {
+          question: "What sport is associated with Wimbledon?",
+          options: ["Tennis", "Badminton", "Cricket", "Squash"],
+          answer: 0
+        },
+        {
+          question: "In which sport is the term 'birdie' used?",
+          options: ["Golf", "Tennis", "Baseball", "Cycling"],
+          answer: 0
+        },
+        {
+          question: "Which sport uses the terms 'strike' and 'spare'?",
+          options: ["Bowling", "Baseball", "Cricket", "Soccer"],
+          answer: 0
+        },
+        {
+          question: "Which country is famous for sumo wrestling?",
+          options: ["China", "Japan", "Korea", "Thailand"],
+          answer: 1
+        },
+        {
+          question: "How many players are there in a football (soccer) team on the field?",
+          options: ["9", "10", "11", "12"],
+          answer: 2
+        }
+      ]
+    }
+  };
+
+  // Global state
+  let userName = "";
+  let selectedTopic = "";
+  let selectedSet = "";
+  let currentQuestionIndex = 0;
+  let score = 0;
+  const QUESTIONS_PER_SET = 20;
+  let timerInterval;
+  let timeLeft = 30;
+  let userAnswers = [];
+
+  // DOM Elements
+  const loginScreen = document.getElementById('login-screen');
+  const usernameInput = document.getElementById('username');
+  const loginBtn = document.getElementById('login-btn');
+
+  const topicSelection = document.getElementById('topic-selection');
+  const userNameDisplay = document.getElementById('user-name-display');
+  const topicsContainer = document.getElementById('topics-container');
+  const logoutBtn = document.getElementById('logout-btn');
+
+  const setSelection = document.getElementById('set-selection');
+  const topicNameDisplay = document.getElementById('topic-name-display');
+  const setsContainer = document.getElementById('sets-container');
+  const backToTopicBtn = document.getElementById('back-to-topic-btn');
+
+  const quizScreen = document.getElementById('quiz-screen');
+  const quizTopicName = document.getElementById('quiz-topic-name');
+  const quizSetName = document.getElementById('quiz-set-name');
+  const timerDisplay = document.getElementById('time-left');
+  const questionText = document.getElementById('question-text');
+  const optionsContainer = document.getElementById('options-container');
+  const nextQuestionBtn = document.getElementById('next-question-btn');
+
+  const resultScreen = document.getElementById('result-screen');
+  const resultSummary = document.getElementById('result-summary');
+  const resultDetails = document.getElementById('result-details');
+  const restartBtn = document.getElementById('restart-btn');
+
+  // --- Utilities ---
+  function showSection(section) {
+    [loginScreen, topicSelection, setSelection, quizScreen, resultScreen].forEach(s => {
+      s.classList.add('hidden');
+    });
+    section.classList.remove('hidden');
+  }
+
+  function clearChildren(element) {
+    while (element.firstChild) {
+      element.removeChild(element.firstChild);
+    }
+  }
+
+  function shuffleArray(arr) {
+    for (let i = arr.length -1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i+1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  // --- Login ---
+  loginBtn.addEventListener('click', () => {
+    const name = usernameInput.value.trim();
+    if (name.length < 2) {
+      alert("Please enter your name (minimum 2 characters).");
+      usernameInput.focus();
+      return;
+    }
+    userName = name;
+    usernameInput.value = "";
+    showTopicSelection();
+  });
+
+  // Allow 'Enter' to trigger login
+  usernameInput.addEventListener('keypress', e => {
+    if (e.key === 'Enter') loginBtn.click();
+  });
+
+  // --- Topic Selection ---
+  function showTopicSelection() {
+    userNameDisplay.textContent = userName;
+    clearChildren(topicsContainer);
+    Object.keys(quizData).forEach(topic => {
+      const btn = document.createElement('button');
+      btn.textContent = topic;
+      btn.setAttribute('aria-label', `Select topic ${topic}`);
+      btn.addEventListener('click', () => {
+        selectedTopic = topic;
+        showSetSelection();
+      });
+      topicsContainer.appendChild(btn);
+    });
+    showSection(topicSelection);
+  }
+
+  logoutBtn.addEventListener('click', () => {
+    userName = "";
+    showSection(loginScreen);
+  });
+
+  // --- Set Selection ---
+  function showSetSelection() {
+    topicNameDisplay.textContent = selectedTopic;
+    clearChildren(setsContainer);
+    const sets = Object.keys(quizData[selectedTopic]);
+    sets.forEach(set => {
+      const btn = document.createElement('button');
+      btn.textContent = set;
+      btn.setAttribute('aria-label', `Select set ${set} for topic ${selectedTopic}`);
+      btn.addEventListener('click', () => {
+        selectedSet = set;
+        startQuiz();
+      });
+      setsContainer.appendChild(btn);
+    });
+    showSection(setSelection);
+  }
+
+  backToTopicBtn.addEventListener('click', () => {
+    showTopicSelection();
+  });
+
+  // --- Quiz ---
+  function startQuiz() {
+    currentQuestionIndex = 0;
+    score = 0;
+    userAnswers = [];
+    quizTopicName.textContent = selectedTopic;
+    quizSetName.textContent = selectedSet;
+    showSection(quizScreen);
+    nextQuestionBtn.disabled = true;
+    loadQuestion();
+  }
+
+  function loadQuestion() {
+    const questions = quizData[selectedTopic][selectedSet];
+    if (currentQuestionIndex >= QUESTIONS_PER_SET || currentQuestionIndex >= questions.length) {
+      endQuiz();
+      return;
+    }
+    nextQuestionBtn.disabled = true;
+    clearChildren(optionsContainer);
+    timeLeft = 30;
+    timerDisplay.textContent = timeLeft;
+    const q = questions[currentQuestionIndex];
+    questionText.textContent = `Q${currentQuestionIndex+1}. ${q.question}`;
+
+    q.options.forEach((opt, index) => {
+      const div = document.createElement('div');
+      div.className = "option";
+      div.textContent = opt;
+      div.setAttribute('role', 'button');
+      div.setAttribute('tabindex', '0');
+      div.setAttribute('aria-pressed', 'false');
+      div.dataset.index = index;
+      div.addEventListener('click', onOptionSelected);
+      div.addEventListener('keypress', e => {
+        if(e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          div.click();
+        }
+      });
+      optionsContainer.appendChild(div);
+    });
+
+    startTimer();
+  }
+
+  function onOptionSelected(e) {
+    if (nextQuestionBtn.disabled === false) return; // already answered
+    const selectedDiv = e.currentTarget;
+    const selectedIndex = Number(selectedDiv.dataset.index);
+    const questions = quizData[selectedTopic][selectedSet];
+    const currentQ = questions[currentQuestionIndex];
+
+    // Stop timer
+    clearInterval(timerInterval);
+
+    // Disable all options and highlight correct/incorrect
+    const optionDivs = optionsContainer.querySelectorAll('.option');
+    optionDivs.forEach(div => {
+      div.removeEventListener('click', onOptionSelected);
+      div.classList.remove('selected');
+      div.setAttribute('aria-pressed', 'false');
+      div.style.pointerEvents = 'none';
+    });
+
+    selectedDiv.classList.add('selected');
+    selectedDiv.setAttribute('aria-pressed', 'true');
+
+    if (selectedIndex === currentQ.answer) {
+      selectedDiv.classList.add('correct');
+      score++;
+      userAnswers.push({question: currentQ.question, selected: selectedIndex, correct: currentQ.answer, correctAnswerText: currentQ.options[currentQ.answer], isCorrect:true});
+    } else {
+      selectedDiv.classList.add('incorrect');
+      userAnswers.push({question: currentQ.question, selected: selectedIndex, correct: currentQ.answer, correctAnswerText: currentQ.options[currentQ.answer], isCorrect:false});
+      // Highlight correct answer
+      if(currentQ.answer !== undefined && currentQ.answer !== null){
+        const correctDiv = optionsContainer.querySelector(`.option[data-index='${currentQ.answer}']`);
+        if(correctDiv) correctDiv.classList.add('correct');
+      }
+    }
+    nextQuestionBtn.disabled = false;
+    nextQuestionBtn.focus();
+  }
+
+  nextQuestionBtn.addEventListener('click', () => {
+    currentQuestionIndex++;
+    loadQuestion();
+  });
+
+  // Timer
+  function startTimer() {
+    timerDisplay.textContent = timeLeft;
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      timerDisplay.textContent = timeLeft;
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        // Consider unanswered as wrong answer and highlight correct answer
+        const questions = quizData[selectedTopic][selectedSet];
+        const currentQ = questions[currentQuestionIndex];
+        const optionDivs = optionsContainer.querySelectorAll('.option');
+        optionDivs.forEach(div => {
+          div.style.pointerEvents = 'none';
+          div.removeEventListener('click', onOptionSelected);
+        });
+        // Highlight correct answer
+        if(currentQ.answer !== undefined && currentQ.answer !== null){
+          const correctDiv = optionsContainer.querySelector(`.option[data-index='${currentQ.answer}']`);
+          if(correctDiv) correctDiv.classList.add('correct');
+        }
+        userAnswers.push({question: currentQ.question, selected: null, correct: currentQ.answer, correctAnswerText: currentQ.options[currentQ.answer], isCorrect:false});
+        nextQuestionBtn.disabled = false;
+        nextQuestionBtn.focus();
+      }
+    }, 1000);
+  }
+
+  // --- Result ---
+  function endQuiz() {
+    showSection(resultScreen);
+    const percentage = Math.round((score / currentQuestionIndex) * 100);
+    resultSummary.textContent = `Hi ${userName}, you scored ${score} out of ${currentQuestionIndex} (${percentage}%)`;
+    // Show detailed results with correct/wrong questions
+    let detailsHTML = '<ol style="padding-left: 20px; max-height: 250px; overflow-y:auto; text-align:left;">';
+    userAnswers.forEach((ans, idx) => {
+      let status = ans.isCorrect ? '✅' : '❌';
+      let selectedText = ans.selected !== null ? quizData[selectedTopic][selectedSet][idx].options[ans.selected] : '(No answer)';
+      detailsHTML += `<li><strong>${ans.question}</strong><br> Your answer: ${selectedText}<br> Correct answer: ${ans.correctAnswerText} ${status}</li>`;
+    });
+    detailsHTML += '</ol>';
+    resultDetails.innerHTML = detailsHTML;
+  }
+
+  restartBtn.addEventListener('click', () => {
+    selectedTopic = "";
+    selectedSet = "";
+    userAnswers = [];
+    score = 0;
+    currentQuestionIndex = 0;
+    showTopicSelection();
+  });
+
+  // Onload show login
+  showSection(loginScreen);
+  usernameInput.focus();
+})();
+</script>
+</body>
+</html>
+</content>
+</create_file>
